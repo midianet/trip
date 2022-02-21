@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration packages="biz.paluch.logging.gelf.log4j2">
+    <Appenders>
+        <Console name="console" target="SYSTEM_OUT">
+            <PatternLayout disableAnsi="false" pattern="%d{${LOG_DATEFORMAT_PATTERN:-yyyy-MM-dd HH:mm:ss.SSS}} %highlight{${LOG_LEVEL_PATTERN:-%5p}}{FATAL=red blink, ERROR=red, WARN=yellow bold, INFO=white , DEBUG=green bold, TRACE=blue} [%15.15t] %style{%-40.40c{1.}}{cyan} : %m%n${LOG_EXCEPTION_CONVERSION_WORD:-%wEx}"/>
+        </Console>
+<!--        <Gelf name="gelf" host="tcp:localhost" port="12201" version="1.1" extractStackTrace="true"-->
+<!--              filterStackTrace="true" mdcProfiling="true" includeFullMdc="true" maximumMessageSize="8192"-->
+<!--              originHost="localhost" ignoreExceptions="true">-->
+<!--            <Field name="timestamp" pattern="%d{yyyy-MM-dd HH:mm:ss,SSS}" />-->
+<!--            <Field name="level" pattern="%level" />&ndash;&gt;-->
+<!--            <Field name="simpleClassName" pattern="%C{1}" />-->
+<!--            <Field name="className" pattern="%C" />-->
+<!--            <Field name="server" pattern="%host" />-->
+<!--        </Gelf>-->
+    </Appenders>
+    <Loggers>
+        <Root level="info">
+            <AppenderRef ref="console"/>
+<!--            <AppenderRef ref="gelf"/>-->
+        </Root>
+    </Loggers>
+</Configuration>
