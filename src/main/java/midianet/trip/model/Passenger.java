@@ -1,10 +1,10 @@
-package midianet.trip.bot.user.domain;
+package midianet.trip.model;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.springframework.lang.NonNull;
 
 import javax.persistence.Column;
 import javax.persistence.Entity;
@@ -21,8 +21,10 @@ import java.time.LocalDate;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class User {
+@JsonInclude(JsonInclude.Include.NON_NULL)
+public class Passenger {
     @Id
+    @NotNull
     private Long id;
 
     @NotBlank
@@ -34,15 +36,16 @@ public class User {
     @Column(nullable = false, length = 10)
     private Status status;
 
-//    @Past
-//    private LocalDate nascimento;
-//
-//    @Size(max = 10)
-//    @Column(length = 10)
-//    private String rg;
-//
-//    @ManyToOne
-//    private Familia familia;
+    @Past
+    @Column(length = 10)
+    private LocalDate nascimento;
+
+    @Size(max = 10)
+    @Column(length = 10)
+    private String rg;
+
+   @ManyToOne
+    private Family family;
 
     public enum Status{
         INTERESTED,ASSOCIATE,CONFIRMED;

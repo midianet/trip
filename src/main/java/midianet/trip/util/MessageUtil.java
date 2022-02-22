@@ -52,8 +52,8 @@ public abstract class MessageUtil {
         return getMessageDefault(DEFAULT_FOUND, field);
     }
 
-    public static String getMessageNotFound(@NonNull final String field){
-        return getMessageDefault(DEFAULT_NOTFOUND, field);
+    public static String getMessageNotFound(@NonNull final String field, final Object key){
+        return getMessageDefault(DEFAULT_NOTFOUND, field, key);
     }
 
 }

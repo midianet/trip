@@ -1,4 +1,4 @@
-package midianet.trip.bot.user.domain;
+package midianet.trip.bot.app.model;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;

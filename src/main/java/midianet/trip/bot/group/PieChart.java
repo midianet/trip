@@ -1,4 +1,4 @@
-package midianet.trip;
+package midianet.trip.bot.group;
 
 //import java.io.*;
 //import org.jfree.chart.ChartUtilities;

@@ -1,4 +1,4 @@
-package midianet.trip.bot.user;
+package midianet.trip.bot.app;
 
 //import midianet.road.bussines.*;
 //import midianet.road.domain.*;
@@ -23,17 +23,17 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
-import midianet.trip.bot.user.domain.MessageUser;
-import midianet.trip.bot.user.domain.User;
-import midianet.trip.bot.user.repository.MessageUserRepository;
-import midianet.trip.bot.user.repository.UserRepository;
+import midianet.trip.bot.app.model.MessageUser;
+import midianet.trip.model.Passenger;
+import midianet.trip.bot.app.repository.MessageUserRepository;
+import midianet.trip.repository.PassengerRepository;
+import midianet.trip.service.PassengerService;
 import midianet.trip.util.TelegramUtil;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Sort;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
-import org.telegram.telegrambots.meta.api.methods.BotApiMethod;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
 import org.telegram.telegrambots.meta.api.objects.Message;
@@ -41,15 +41,12 @@ import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
+import org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException;
 
 import javax.transaction.Transactional;
-import java.io.Serializable;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.text.NumberFormat;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
-import java.util.Locale;
 import java.util.stream.Collectors;
 
 import static midianet.trip.util.MessageUtil.*;
@@ -57,66 +54,18 @@ import static midianet.trip.util.MessageUtil.*;
 @Log4j2
 @Component
 @RequiredArgsConstructor
-public class UserBot extends TelegramLongPollingBot {
-
-    @Value("${trip.telegram.user}")
-    private String user;
-
-    @Value("${trip.telegram.token}")
-    private String token;
-
+public class AppBot extends TelegramLongPollingBot {
     private static final String PARSE_MODE_HTML = "html";
 
     private final MessageUserRepository repository;
-    private final UserRepository userRepository;
+    private final PassengerService passengerService;
+    private final PassengerRepository passengerRepository;
 
-//    private static final String CMD_START       = "/start";
-//    private static final String CMD_LIST        = "/list";
-//    private static final String CMD_ACCOUNT     = "/account";
-//    private static final String CMD_BALANCE     = "/balance";
-//    private static final String MNU_ROOT        = "MNUROOT";
-//    private static final String CMD_NTC_ALL     = "/noticeAll";
-//    private static final String CMD_NTC_PAY     = "/noticePay";
-//    private static final String CMD_NTC_NO_PAY  = "/noticeNoPay";
-//    private static final String CMD_PROFILE     = "/profile";
-//    private static final String CMD_NTC_CONFIRM = "/confirm";
-//    private static final String CMD_CONTINUE    = "/continue";
-//
-//
-//    private static final String CMD_DRINK   = "/drink";
-//    private static final String CMD_NADA   = "/nada";
-//    private static final String CMD_CERVEJA = "/cerva";
-//    private static final String CMD_REFRIG  = "/refri";
-//    private static final String CMD_ENERG   = "/energ";
-//    private static final String CMD_SUCO    = "/suco";
-//    private static final String CMD_ICE     = "/ice";
-//    private static final String CMD_TODDY   = "/toddy";
-//    private static final String CMD_AGUAC   = "/agua";
-//    private static final String CMD_VOLTAR  = "/back";
-//    private static final String MNU_DRINK   = "MNUDRINK";
-////    private static final String CMD_CONDUCT = "/conduct";
-////    private static final String CMD_AGREE   =  "/concordo";
-////    private static final String CMD_DISAGREE=  "/discordo";
-//
-//    @Autowired
-//    private AlienBot alienBot;
-//
-//    @Autowired
-//    private PartnerBussines partnerBussines;
-//
-//    @Autowired
-//    private MessageBussines messageBussines;
-//
-//    @Autowired
-//    private BedroomBussines bedroomBussines;
-//
-//    @Autowired
-//    private BalanceBussines balanceBussines;
+    @Value("${trip.bot.app.user}")
+    private String user;
 
-    @Override
-    public String getBotToken() {
-        return token;
-    }
+    @Value("${trip.bot.app.token}")
+    private String token;
 
     @Override
     @Transactional
@@ -131,14 +80,22 @@ public class UserBot extends TelegramLongPollingBot {
                     case LIST:
                         actionList(message);
                         break;
-                    case PAYMENT: actionPayment(message); break;
+                    case PAYMENT:
+                        actionPayment(message);
+                        break;
                     case ACCOUNT:
                         actionAccount(message);
                         break;
                 }
             }
+        }catch (TelegramApiRequestException e){
+            if(e.getErrorCode() != 400) {
+                actionRecovery(update);
+                log.error(e.getMessage(),e);
+            }
         } catch (TelegramApiException e) {
             log.error(e.getMessage(), e);
+            actionRecovery(update);
         }
 //        if (update.hasMessage()) {
 //            final String text = update.getMessage().getText();
@@ -216,12 +173,204 @@ public class UserBot extends TelegramLongPollingBot {
 //        }
     }
 
+    private void actionStart(@NonNull final Message message) throws TelegramApiException {
+        final var name = TelegramUtil.buildFullName(message.getFrom().getFirstName(),
+                message.getFrom().getLastName());
+        final var messageId = execute(SendMessage.builder()
+                .chatId(String.valueOf(message.getChatId()))
+                .text(getMessage("midianet.trip.message.bot.app.welcome", name))
+                .replyMarkup(buildKeyboard())
+                .parseMode(PARSE_MODE_HTML)
+                .build()).getChatId();
+        passengerRepository.findById(message.getChatId())
+                .orElseGet(() -> passengerRepository.save(Passenger.builder()
+                        .id(message.getChatId())
+                        .status(Passenger.Status.INTERESTED)
+                        .name(name).build()));
+        repository.save(MessageUser.builder()
+                .chatId(message.getChatId())
+                .messageId(messageId).build());
+    }
+
+    private void actionRecovery(@NonNull final Update update){
+        try {
+            actionStart(update.hasMessage() ? update.getMessage() : update.getCallbackQuery().getMessage());
+        }catch (Exception e){
+            log.error(e.getMessage(),e);
+        }
+    }
+
+    private void actionList(@NonNull final Message message) throws TelegramApiException {
+        final var text = new StringBuilder();
+        final var list = passengerRepository.findAll(Sort.by(Sort.DEFAULT_DIRECTION, "name", "status"));
+        final var listInterested = list.stream()
+                .filter(passenger -> Passenger.Status.INTERESTED.equals(passenger.getStatus()))
+                .collect(Collectors.toList());
+        final var listAssociate = list.stream()
+                .filter(passenger -> Passenger.Status.ASSOCIATE.equals(passenger.getStatus()))
+                .collect(Collectors.toList());
+        final var listConfirmed = list.stream()
+                .filter(passenger -> Passenger.Status.CONFIRMED.equals(passenger.getStatus()))
+                .collect(Collectors.toList());
+        if (!listInterested.isEmpty()) {
+            text.append("\n\uD83D\uDD34 <b>Interessados (").append(listInterested.size()).append(")</b>\n");
+            listInterested.forEach(passenger -> text.append(buildUserRow(passenger)));
+        }
+        if (!listAssociate.isEmpty()) {
+            text.append("\n\uD83D\uDFE0 <b>Associados (").append(listAssociate.size()).append(")</b>\n");
+            listAssociate.forEach(passenger -> text.append(buildUserRow(passenger)));
+        }
+        if (!listConfirmed.isEmpty()) {
+            text.append("\n\uD83D\uDFE2 <b>Confirmados (").append(listAssociate.size()).append(")</b>\n");
+            listConfirmed.forEach(passenger -> text.append(buildUserRow(passenger)));
+        }
+        if (list.isEmpty()) {
+            text.append("Lista Vazia\n");
+        }
+        final var sum = listAssociate.size() + listConfirmed.size();
+        final var percent = BigDecimal.valueOf(sum / .55).setScale(2, RoundingMode.HALF_EVEN);
+        text.append("\n\uD83D\uDE8C Lotação atual: <b>").append(percent.doubleValue()).append("%</b> -  <i>").append(sum).append(" de 55</i>");
+        execute(EditMessageText.builder()
+                .chatId(String.valueOf(message.getChatId()))
+                .messageId(message.getMessageId())
+                .text(text.toString())
+                .parseMode(PARSE_MODE_HTML)
+                .replyMarkup(buildKeyboard())
+                .build());
+    }
+
+    private void actionAccount(@NonNull Message message) throws TelegramApiException {
+        execute(EditMessageText.builder()
+                .chatId(String.valueOf(message.getChatId()))
+                .messageId(message.getMessageId())
+                .replyMarkup(buildKeyboard())
+                .parseMode(PARSE_MODE_HTML)
+                .text("⚙️ Banco: <b>Caixa Econômica</b>\n⚙️ Agência: <b>3621</b>\n⚙️ Operação: <b>001</b>\n⚙️ Conta Corrente: <b>24894-3</b>\n\uD83D\uDC64 <i>Marcos Fernando da Costa</i>\n\uD83D\uDC64 <i>854.024.191-91</i>\n\uD83D\uDCDE <i>62.98417-7762</i>\n✉️ <i>midianet@gmail.com</i>")
+                .build());
+    }
+
+    private void actionPayment(@NonNull final Message message) throws TelegramApiException {
+//        final DateTimeFormatter dtf = DateTimeFormatter.ofPattern ("dd-MM-yyyy");
+//        final NumberFormat nbf = NumberFormat.getCurrencyInstance(new Locale("pt", "BR" ));
+//        final Long chatId = update.getCallbackQuery().getMessage().getChatId();
+//        final Integer messageId = update.getCallbackQuery().getMessage().getMessageId();
+        final var report = new StringBuilder();
+//        final Optional<Person> person = personRepository.findByTelegram(chatId);
+//        person.ifPresent(p -> {
+//            Double credit = 0.0;
+//            final List<Payment> payments = paymentRepository.findByPerson(p.getId())
+//                    .stream()
+//                    .filter(pa -> !ObjectUtils.isEmpty(pa.getDateLow()))
+//                    .collect(Collectors.toList());
+//            if (!payments.isEmpty()) {
+//                report.append("\n\uD83D\uDE04 Depósitos");
+//                payments.forEach(pa -> {
+//                    report.append("\n  \uD83D\uDCB0")
+//                            .append(pa.getDate().format(dtf))
+//                            .append("   ")
+//                            .append(nbf.format(pa.getAmount()));
+//                });
+//                credit = payments.stream()
+//                        .map(Payment::getAmount)
+//                        .reduce(BigDecimal::add)
+//                        .get().doubleValue();
+//                report.append("\n\uD83E\uDD14 Saldo ").append(nbf.format(credit));
+//            }else{
+        report.append("\uD83E\uDD14 Ainda não existe pagamentos registrados");
+//            }
+//        });
+        execute(EditMessageText.builder()
+                .chatId(String.valueOf(message.getChatId()))
+                .messageId(message.getMessageId())
+                .replyMarkup(buildKeyboard())
+                .parseMode(PARSE_MODE_HTML)
+                .text(report.toString()).build());
+    }
+
+    private String buildUserRow(@NonNull final Passenger passenger) {
+        return "  \uD83E\uDD14 ".concat(passenger.getName()).concat("\n");
+    }
+
+    private InlineKeyboardMarkup buildKeyboard() {
+        return InlineKeyboardMarkup.builder()
+                .keyboardRow(List.of(
+                        InlineKeyboardButton.builder()
+                                .callbackData(Action.LIST.name())
+                                .text("Passageiros")
+                                .build(),
+                        InlineKeyboardButton.builder()
+                                .callbackData(Action.PAYMENT.name())
+                                .text("Pagamentos")
+                                .build()))
+
+                .keyboardRow(List.of(
+                        InlineKeyboardButton.builder()
+                                .callbackData(Action.ACCOUNT.name())
+                                .text("Conta Depósito")
+                                .build())).build();
+    }
+
+    @Override
+    public String getBotToken() {
+        return token;
+    }
+
     @Override
     public String getBotUsername() {
         return user;
     }
 
-    //    private void actionBeer(final Update update) {
+    @Getter
+    @AllArgsConstructor
+    public enum Action {
+        START, LIST, ACCOUNT, PAYMENT;
+    }
+
+}
+
+//    private static final String CMD_START       = "/start";
+//    private static final String CMD_LIST        = "/list";
+//    private static final String CMD_ACCOUNT     = "/account";
+//    private static final String CMD_BALANCE     = "/balance";
+//    private static final String MNU_ROOT        = "MNUROOT";
+//    private static final String CMD_NTC_ALL     = "/noticeAll";
+//    private static final String CMD_NTC_PAY     = "/noticePay";
+//    private static final String CMD_NTC_NO_PAY  = "/noticeNoPay";
+//    private static final String CMD_PROFILE     = "/profile";
+//    private static final String CMD_NTC_CONFIRM = "/confirm";
+//    private static final String CMD_CONTINUE    = "/continue";
+//
+//
+//    private static final String CMD_DRINK   = "/drink";
+//    private static final String CMD_NADA   = "/nada";
+//    private static final String CMD_CERVEJA = "/cerva";
+//    private static final String CMD_REFRIG  = "/refri";
+//    private static final String CMD_ENERG   = "/energ";
+//    private static final String CMD_SUCO    = "/suco";
+//    private static final String CMD_ICE     = "/ice";
+//    private static final String CMD_TODDY   = "/toddy";
+//    private static final String CMD_AGUAC   = "/agua";
+//    private static final String CMD_VOLTAR  = "/back";
+//    private static final String MNU_DRINK   = "MNUDRINK";
+////    private static final String CMD_CONDUCT = "/conduct";
+////    private static final String CMD_AGREE   =  "/concordo";
+////    private static final String CMD_DISAGREE=  "/discordo";
+//
+//    @Autowired
+//    private AlienBot alienBot;
+//
+//    @Autowired
+//    private PartnerBussines partnerBussines;
+//
+//    @Autowired
+//    private MessageBussines messageBussines;
+//
+//    @Autowired
+//    private BedroomBussines bedroomBussines;
+//
+//    @Autowired
+//    private BalanceBussines balanceBussines;
+//    private void actionBeer(final Update update) {
 //        try {
 //            final Long chatId = update.getCallbackQuery().getMessage().getChatId();
 //            final Integer messageId = update.getCallbackQuery().getMessage().getMessageId();
@@ -448,137 +597,6 @@ public class UserBot extends TelegramLongPollingBot {
 //        }
 //    }
 //
-    private void actionStart(@NonNull final Message message) throws TelegramApiException {
-        final var name = TelegramUtil.buildFullName(message.getFrom().getFirstName(),
-                message.getFrom().getLastName());
-        final var messageId = execute(SendMessage.builder()
-                .chatId(String.valueOf(message.getChatId()))
-                .text(getMessage("midianet.trip.message.user.welcome", name))
-                .replyMarkup(buildKeyboard())
-                .parseMode(PARSE_MODE_HTML)
-                .build()).getChatId();
-        userRepository.findById(message.getChatId())
-                .orElseGet(() -> userRepository.save(User.builder()
-                        .id(message.getChatId())
-                        .status(User.Status.INTERESTED)
-                        .name(name).build()));
-        repository.save(MessageUser.builder()
-                .chatId(message.getChatId())
-                .messageId(messageId).build());
-    }
-
-    private String buildUserRow(@NonNull final User user) {
-        return "  \uD83E\uDD14 ".concat(user.getName()).concat("\n");
-    }
-
-    private void actionList(@NonNull final Message message) throws TelegramApiException {
-        final var text = new StringBuilder();
-        final var list = userRepository.findAll(Sort.by(Sort.DEFAULT_DIRECTION, "name", "status"));
-        final var listInterested = list.stream()
-                .filter(user -> User.Status.INTERESTED.equals(user.getStatus()))
-                .collect(Collectors.toList());
-        final var listAssociate = list.stream()
-                .filter(user -> User.Status.ASSOCIATE.equals(user.getStatus()))
-                .collect(Collectors.toList());
-        final var listConfirmed = list.stream()
-                .filter(user -> User.Status.CONFIRMED.equals(user.getStatus()))
-                .collect(Collectors.toList());
-        if (!listInterested.isEmpty()) {
-            text.append("\uD83D\uDFE0 <b>Interessados (").append(listInterested.size()).append(")</b>\n");
-            listInterested.forEach(user -> text.append(buildUserRow(user)));
-        }
-        if (!listAssociate.isEmpty()) {
-            text.append("\uD83D\uDFE1 <b>Associados (").append(listAssociate.size()).append(")</b>\n");
-            listAssociate.forEach(user -> text.append(buildUserRow(user)));
-        }
-        if (!listConfirmed.isEmpty()) {
-            text.append("\uD83D\uDFE2 <b>Confirmados (").append(listAssociate.size()).append(")</b>\n");
-            listConfirmed.forEach(user -> text.append(buildUserRow(user)));
-        }
-        if (list.isEmpty()) {
-            text.append("Lista Vazia\n");
-        }
-        final var sum = listAssociate.size() + listConfirmed.size();
-        final var percent = BigDecimal.valueOf(sum / .55).setScale(2, RoundingMode.HALF_EVEN);
-        text.append("\n\n\uD83D\uDE8C Lotação atual: <b>").append(percent.doubleValue()).append("%</b> -  <i>").append(sum).append(" de 55</i>");
-        execute(EditMessageText.builder()
-                .chatId(String.valueOf(message.getChatId()))
-                .messageId(message.getMessageId())
-                .text(text.toString())
-                .parseMode(PARSE_MODE_HTML)
-                .replyMarkup(buildKeyboard())
-                .build());
-    }
-
-    private void actionAccount(@NonNull Message message) throws TelegramApiException {
-        execute(EditMessageText.builder()
-            .chatId(String.valueOf(message.getChatId()))
-            .messageId(message.getMessageId())
-            .replyMarkup(buildKeyboard())
-            .parseMode(PARSE_MODE_HTML)
-            .text("⚙️ Banco: <b>Caixa Econômica</b>\n⚙️ Agência: <b>3621</b>\n⚙️ Operação: <b>001</b>\n⚙️ Conta Corrente: <b>24894-3</b>\n\uD83D\uDC64 <i>Marcos Fernando da Costa</i>\n\uD83D\uDC64 <i>854.024.191-91</i>\n\uD83D\uDCDE <i>62.98417-7762</i>\n✉️ <i>midianet@gmail.com</i>")
-            .build());
-    }
-
-    private void actionPayment(@NonNull final Message message) throws TelegramApiException {
-//        final DateTimeFormatter dtf = DateTimeFormatter.ofPattern ("dd-MM-yyyy");
-//        final NumberFormat nbf = NumberFormat.getCurrencyInstance(new Locale("pt", "BR" ));
-//        final Long chatId = update.getCallbackQuery().getMessage().getChatId();
-//        final Integer messageId = update.getCallbackQuery().getMessage().getMessageId();
-        final var report = new StringBuilder();
-//        final Optional<Person> person = personRepository.findByTelegram(chatId);
-//        person.ifPresent(p -> {
-//            Double credit = 0.0;
-//            final List<Payment> payments = paymentRepository.findByPerson(p.getId())
-//                    .stream()
-//                    .filter(pa -> !ObjectUtils.isEmpty(pa.getDateLow()))
-//                    .collect(Collectors.toList());
-//            if (!payments.isEmpty()) {
-//                report.append("\n\uD83D\uDE04 Depósitos");
-//                payments.forEach(pa -> {
-//                    report.append("\n  \uD83D\uDCB0")
-//                            .append(pa.getDate().format(dtf))
-//                            .append("   ")
-//                            .append(nbf.format(pa.getAmount()));
-//                });
-//                credit = payments.stream()
-//                        .map(Payment::getAmount)
-//                        .reduce(BigDecimal::add)
-//                        .get().doubleValue();
-//                report.append("\n\uD83E\uDD14 Saldo ").append(nbf.format(credit));
-//            }else{
-        report.append("\uD83E\uDD14 Ainda não existe pagamentos registrados");
-//            }
-//        });
-        execute(EditMessageText.builder()
-            .chatId(String.valueOf(message.getChatId()))
-            .messageId(message.getMessageId())
-            .replyMarkup(buildKeyboard())
-            .parseMode(PARSE_MODE_HTML)
-            .text(report.toString()).build());
-    }
-
-    private InlineKeyboardMarkup buildKeyboard() {
-        return InlineKeyboardMarkup.builder()
-                .keyboardRow(List.of(
-                        InlineKeyboardButton.builder()
-                            .callbackData(Action.LIST.name())
-                            .text("Passageiros")
-                            .build(),
-                        InlineKeyboardButton.builder()
-                            .callbackData(Action.PAYMENT.name())
-                            .text("Pagamentos")
-                            .build()))
-
-                .keyboardRow(List.of(
-                        InlineKeyboardButton.builder()
-                            .callbackData(Action.ACCOUNT.name())
-                            .text("Conta Depósito")
-                            .build())).build();
-    }
-    //aki
-
-
 //    Logger log = Logger.getLogger(getClass().getName());
 //    private static final String ACTION_START    = "/start";
 //    private static final String ACTION_CONTINUE = "/continue";
@@ -716,7 +734,6 @@ public class UserBot extends TelegramLongPollingBot {
 //        }).onFailure(e -> custoLog(e));
 //    }
 //
-
 //
 //
 //    private void actionProfile(Update update){
@@ -854,20 +871,7 @@ public class UserBot extends TelegramLongPollingBot {
 //        }).onFailure(e -> custoLog(e));
 //    }
 //
-//    private void actionRecovery(Update update){
-//        Try.run(() -> {
-//            Integer messageId;
-//            Long chatId = update.hasMessage() ? update.getMessage().getChatId() : update.getCallbackQuery().getMessage().getChatId();
-//            String text = String.format("Escolha uma das opções abaixo.");
-//            SendMessage send = new SendMessage();
-//            send.setChatId(chatId);
-//            send.setText(text);
-//            send.setReplyMarkup(buildKeyboard(ACTION_MAIN));
-//            send.enableHtml(true);
-//            messageId = execute(send).getMessageId();
-//            messageRepository.save(Message.builder().telegram(chatId).message(messageId).build());
-//        }).onFailure(e -> custoLog(e));
-//    }
+
 //
 //    private void actionSubscrible(Update update, Person.Contract contract){
 //        Long chatId        = update.getCallbackQuery().getMessage().getChatId();
@@ -1039,11 +1043,3 @@ public class UserBot extends TelegramLongPollingBot {
 //            log.log(Level.SEVERE,e.getMessage(),e);
 //        }
 //    }
-
-    @Getter
-    @AllArgsConstructor
-    public enum Action {
-        START, LIST, ACCOUNT, PAYMENT;
-    }
-
-}

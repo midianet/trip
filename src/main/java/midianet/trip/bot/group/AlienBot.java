@@ -1,4 +1,4 @@
-package midianet.trip;
+package midianet.trip.bot.group;
 //
 //import midianet.road.bussines.PartnerBussines;
 //import org.apache.log4j.Logger;
