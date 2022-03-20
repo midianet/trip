@@ -31,6 +31,7 @@ public class FamilyController {
         return service.findById(id);
     }
 
+
     @GetMapping
     public Page<Family> find(@RequestParam(required = false) final String name,
                                 @RequestParam(required = false, defaultValue = DEFAULT_PAGE ) final Integer page,
