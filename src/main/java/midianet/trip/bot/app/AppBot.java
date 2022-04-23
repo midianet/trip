@@ -182,9 +182,9 @@ public class AppBot extends TelegramLongPollingBot {
                 .replyMarkup(buildKeyboard())
                 .parseMode(PARSE_MODE_HTML)
                 .build()).getChatId();
-        passengerRepository.findById(message.getChatId())
+        passengerRepository.findById(String.valueOf(message.getChatId()))
                 .orElseGet(() -> passengerRepository.save(Passenger.builder()
-                        .id(message.getChatId())
+                        .id(String.valueOf(message.getChatId()))
                         .status(Passenger.Status.INTERESTED)
                         .name(name).build()));
         repository.save(MessageUser.builder()
@@ -207,7 +207,7 @@ public class AppBot extends TelegramLongPollingBot {
                 .filter(passenger -> Passenger.Status.INTERESTED.equals(passenger.getStatus()))
                 .collect(Collectors.toList());
         final var listAssociate = list.stream()
-                .filter(passenger -> Passenger.Status.ASSOCIATE.equals(passenger.getStatus()))
+                .filter(passenger -> Passenger.Status.ASSOCIATED.equals(passenger.getStatus()))
                 .collect(Collectors.toList());
         final var listConfirmed = list.stream()
                 .filter(passenger -> Passenger.Status.CONFIRMED.equals(passenger.getStatus()))

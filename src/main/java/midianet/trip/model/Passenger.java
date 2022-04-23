@@ -25,7 +25,7 @@ import java.time.LocalDate;
 public class Passenger {
     @Id
     @NotNull
-    private Long id;
+    private String id;
 
     @NotBlank
     @Size(max = 80)
@@ -38,7 +38,7 @@ public class Passenger {
 
     @Past
     @Column(length = 10)
-    private LocalDate nascimento;
+    private LocalDate birthdate;
 
     @Size(max = 10)
     @Column(length = 10)
@@ -48,7 +48,7 @@ public class Passenger {
     private Family family;
 
     public enum Status{
-        INTERESTED,ASSOCIATE,CONFIRMED;
+        INTERESTED,ASSOCIATED,CONFIRMED;
 
     }
 

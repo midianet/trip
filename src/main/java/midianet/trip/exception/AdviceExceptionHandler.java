@@ -208,6 +208,7 @@ public class AdviceExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler({ Exception.class})
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public ErrorResponse handleAll(final Exception e, final WebRequest request) {
+        logger.error(e.getMessage(),e);
         return ErrorResponse.builder().message(e.getLocalizedMessage()).build();
     }
 
