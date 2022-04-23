@@ -23,11 +23,10 @@ import static midianet.trip.util.Filter.*;
 @CrossOrigin(origins = "*")
 @RequestMapping("/passenger")
 public class PassengerController {
-
     private final PassengerService service;
 
     @GetMapping("/{id}")
-    public Passenger get(@PathVariable final Long id) {
+    public Passenger get(@PathVariable final String id) {
         return service.findById(id);
     }
 
@@ -55,13 +54,13 @@ public class PassengerController {
     }
 
     @PutMapping("/{id}")
-    public void put(@PathVariable final Long id, @Valid @RequestBody final Passenger passenger) {
+    public void put(@PathVariable final String id, @Valid @RequestBody final Passenger passenger) {
         service.update(id, passenger);
     }
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void delete(@PathVariable final Long id) {
+    public void delete(@PathVariable final String id) {
         service.deleteById(id);
     }
 

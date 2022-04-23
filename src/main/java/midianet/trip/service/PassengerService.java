@@ -23,7 +23,7 @@ public class PassengerService {
 
     private final PassengerRepository repository;
 
-    public Passenger findById(@NonNull final Long id) {
+    public Passenger findById(@NonNull final String id) {
         return repository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException(MessageUtil.getMessageNotFound("Passageiro",id)));
     }
@@ -54,21 +54,20 @@ public class PassengerService {
     @Transactional
     public void create(@NonNull final Passenger passenger) {
         passenger.setId(Optional.ofNullable(passenger.getId())
-            .orElse(UUID.randomUUID().getLeastSignificantBits()));
-        passenger.setId(passenger.getId() < 0 ? passenger.getId() * -1: passenger.getId());
+            .orElse(String.valueOf(UUID.randomUUID().getLeastSignificantBits())).replace("-",""));
         passenger.setStatus(Passenger.Status.INTERESTED);
         repository.save(passenger);
     }
 
     @Transactional
-    public void update(@NonNull final Long id, @NonNull final Passenger passenger) {
+    public void update(@NonNull final String id, @NonNull final Passenger passenger) {
         final var persistent = findById(id);
         BeanUtils.copyProperties(passenger, persistent, "id");
         repository.save(persistent);
     }
 
     @Transactional
-    public void deleteById(@NonNull final Long id) {
+    public void deleteById(@NonNull final String id) {
         repository.delete(findById(id));
     }
 

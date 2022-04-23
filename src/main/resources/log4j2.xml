@@ -4,7 +4,13 @@
         <Console name="console" target="SYSTEM_OUT">
             <PatternLayout disableAnsi="false" pattern="%d{${LOG_DATEFORMAT_PATTERN:-yyyy-MM-dd HH:mm:ss.SSS}} %highlight{${LOG_LEVEL_PATTERN:-%5p}}{FATAL=red blink, ERROR=red, WARN=yellow bold, INFO=white , DEBUG=green bold, TRACE=blue} [%15.15t] %style{%-40.40c{1.}}{cyan} : %m%n${LOG_EXCEPTION_CONVERSION_WORD:-%wEx}"/>
         </Console>
-<!--        <Gelf name="gelf" host="tcp:localhost" port="12201" version="1.1" extractStackTrace="true"-->
+        <File name="file-root" fileName="trip-log" >
+            <PatternLayout>
+                <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level %c [%M] - %msg%n</pattern>
+            </PatternLayout>
+        </File>
+
+        <!--        <Gelf name="gelf" host="tcp:localhost" port="12201" version="1.1" extractStackTrace="true"-->
 <!--              filterStackTrace="true" mdcProfiling="true" includeFullMdc="true" maximumMessageSize="8192"-->
 <!--              originHost="localhost" ignoreExceptions="true">-->
 <!--            <Field name="timestamp" pattern="%d{yyyy-MM-dd HH:mm:ss,SSS}" />-->
@@ -15,9 +21,16 @@
 <!--        </Gelf>-->
     </Appenders>
     <Loggers>
-        <Root level="info">
+        <Logger name="org.springframework" level="INFO" additivity="false">
             <AppenderRef ref="console"/>
-<!--            <AppenderRef ref="gelf"/>-->
+            <AppenderRef ref="file-root"/>
+        </Logger>
+        <Logger name="midianet" level="INFO" additivity="false">
+            <AppenderRef ref="console"/>
+            <AppenderRef ref="file-root"/>
+        </Logger>
+        <Root>
+            <AppenderRef ref="console"/>
         </Root>
     </Loggers>
 </Configuration>
