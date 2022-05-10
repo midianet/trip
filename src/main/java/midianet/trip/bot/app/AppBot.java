@@ -27,10 +27,13 @@ import midianet.trip.bot.app.model.MessageUser;
 import midianet.trip.model.Passenger;
 import midianet.trip.bot.app.repository.MessageUserRepository;
 import midianet.trip.repository.PassengerRepository;
+import midianet.trip.repository.PaymentRepository;
 import midianet.trip.service.PassengerService;
+import midianet.trip.util.DateUtil;
 import midianet.trip.util.TelegramUtil;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Sort;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
@@ -47,6 +50,7 @@ import javax.transaction.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 import static midianet.trip.util.MessageUtil.*;
@@ -58,8 +62,8 @@ public class AppBot extends TelegramLongPollingBot {
     private static final String PARSE_MODE_HTML = "html";
 
     private final MessageUserRepository repository;
-    private final PassengerService passengerService;
     private final PassengerRepository passengerRepository;
+    private final PaymentRepository paymentRepository;
 
     @Value("${trip.bot.app.user}")
     private String user;
@@ -252,9 +256,29 @@ public class AppBot extends TelegramLongPollingBot {
     private void actionPayment(@NonNull final Message message) throws TelegramApiException {
 //        final DateTimeFormatter dtf = DateTimeFormatter.ofPattern ("dd-MM-yyyy");
 //        final NumberFormat nbf = NumberFormat.getCurrencyInstance(new Locale("pt", "BR" ));
-//        final Long chatId = update.getCallbackQuery().getMessage().getChatId();
-//        final Integer messageId = update.getCallbackQuery().getMessage().getMessageId();
-        final var report = new StringBuilder();
+        final Long chatId = message.getChatId();
+        final Integer messageId = message.getMessageId();
+        final var report = new StringBuilder("\uD83D\uDCB0 <b>Pagamentos</b>\n\n");
+        passengerRepository.findById(String.valueOf(chatId))
+            .ifPresent(passenger -> {
+                if(Objects.nonNull(passenger.getFamily())){
+                    report.append(String.format("\uD83D\uDC68\u200D\uD83D\uDC68\u200D\uD83D\uDC66 <b>Familia:</b> %s\n",passenger.getFamily().getName()));
+                    final var payments = paymentRepository.findByFamilyId(passenger.getFamily().getId());
+                    payments.forEach(payment -> {
+                        report.append(String.format("\uD83D\uDCB5 %s - <b>%s</b>\n",
+                                payment.getDate().format(DateUtil.DATE_DDMMYYYY),
+                                DateUtil.CURRENCY_FORMAT.format(payment.getAmount())));
+                    });
+                    final var total = payments.stream()
+                        .map(payment -> payment.getAmount())
+                        .reduce(0.0, Double::sum).doubleValue();
+                    if(total > 0.0){
+                        report.append(String.format("\uD83D\uDCB2 Total: <b>%d</b>\n", total ));
+                    }else{
+                        report.append("\uD83E\uDD14 Ainda não existe pagamentos registrados");
+                    }
+            }
+        });
 //        final Optional<Person> person = personRepository.findByTelegram(chatId);
 //        person.ifPresent(p -> {
 //            Double credit = 0.0;
@@ -276,7 +300,7 @@ public class AppBot extends TelegramLongPollingBot {
 //                        .get().doubleValue();
 //                report.append("\n\uD83E\uDD14 Saldo ").append(nbf.format(credit));
 //            }else{
-        report.append("\uD83E\uDD14 Ainda não existe pagamentos registrados");
+
 //            }
 //        });
         execute(EditMessageText.builder()
